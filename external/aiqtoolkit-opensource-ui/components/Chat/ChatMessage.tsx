@@ -7,6 +7,7 @@ import {
   IconTrash,
   IconUser,
   IconVolume2,
+  IconLink,
 } from '@tabler/icons-react';
 import { FC, memo, useContext, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'next-i18next';
@@ -249,9 +250,10 @@ export const ChatMessage: FC<Props> = memo(({ message, messageIndex, onEdit}) =>
                   </div>
                 </div>
               ) : (
-                <div className="prose whitespace-pre-wrap dark:prose-invert flex-1 w-full overflow-x-auto">
+                <div className="flex-1 w-full">
+                <div className="prose whitespace-pre-wrap dark:prose-invert w-full overflow-x-auto">
                   <ReactMarkdown
-                    className="prose dark:prose-invert flex-1 w-full flex-grow max-w-full whitespace-normal"
+                    className="prose dark:prose-invert w-full flex-grow max-w-full whitespace-normal"
                     remarkPlugins={[remarkGfm, remarkMath]}
                     rehypePlugins={[rehypeRaw] as any}
                     linkTarget="_blank"
@@ -260,7 +262,42 @@ export const ChatMessage: FC<Props> = memo(({ message, messageIndex, onEdit}) =>
                     {prepareContent({ message, role: 'user' })}
                   </ReactMarkdown>
                 </div>
-              )}
+                  {/* 添加图片附件显示 */}
+                  {message.attachments && message.attachments.length > 0 && (
+                    <div className="mt-3">
+                      {message.attachments.map((attachment, index) => {
+                        if (attachment.type === 'image') {
+                          // 判断是URL图片还是base64图片
+                          const isUrl = attachment.content.startsWith('http://') || attachment.content.startsWith('https://');
+                          const imageUrl = isUrl ? attachment.content : attachment.content;
+                          
+                          return (
+                            <div key={index} className="mb-2 p-2 bg-gray-100 dark:bg-gray-700 rounded-md">
+                              <img 
+                                src={imageUrl} 
+                                alt={attachment.name || '图片'} 
+                                className="max-w-full h-auto rounded-md max-h-48 object-contain"
+                                onError={(e) => {
+                                  e.currentTarget.style.display = 'none';
+                                }}
+                              />
+                              <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                {attachment.name || (isUrl ? 'URL图片' : '上传的图片')}
+                                {isUrl && (
+                                  <div className="truncate text-[10px] opacity-75">
+                                    {attachment.content}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        }
+                        return null;
+                      })}
+                    </div>
+                  )} 
+                </div>
+              )} 
 
               {!isEditing && (
                 <div className="absolute right-2 flex flex-col md:flex-row gap-1 items-center md:items-start justify-end md:justify-start">
@@ -280,6 +317,7 @@ export const ChatMessage: FC<Props> = memo(({ message, messageIndex, onEdit}) =>
               )}
             </div>
           ) : (
+            // 助理消息部分保持不变
             <div className="flex flex-col w-[90%]">
               <div className="flex flex-col gap-2">    
                 {/* for intermediate steps content  */}

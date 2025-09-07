@@ -1,2 +1,0 @@
-aiqtoolkit~=1.2
-crewai~=0.95.0

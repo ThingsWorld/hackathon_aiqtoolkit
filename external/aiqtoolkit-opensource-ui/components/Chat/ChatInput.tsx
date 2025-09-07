@@ -10,6 +10,7 @@ import {
   IconMicrophone,
   IconPlayerStopFilled,
   IconMicrophone2,
+  IconLink, // 添加链接图标
 } from '@tabler/icons-react';
 import {
   KeyboardEvent,
@@ -30,7 +31,7 @@ import HomeContext from '@/pages/api/home/home.context';
 import { compressImage, getWorkflowName } from '@/utils/app/helper';
 import { appConfig } from '@/utils/app/const';
 import toast from 'react-hot-toast';
-
+import { ImageUploadButton } from './ImageUploadButton';
 
 interface Props {
   onSend: (message: Message) => void;
@@ -38,7 +39,12 @@ interface Props {
   onScrollDownClick: () => void;
   textareaRef: MutableRefObject<HTMLTextAreaElement | null>;
   showScrollDownButton: boolean;
-  controller: Ref<AbortController>
+  controller: Ref<AbortController>;
+  // 添加图片相关props
+  onImageSelect?: (file: File, base64Content: string) => void;
+  imageFile?: File | null;
+  imageContent?: string;
+  onImageDelete?: () => void;
 }
 
 export const ChatInput = ({
@@ -47,7 +53,12 @@ export const ChatInput = ({
   onScrollDownClick,
   textareaRef,
   showScrollDownButton,
-  controller
+  controller,
+  // 添加图片相关props
+  onImageSelect,
+  imageFile,
+  imageContent,
+  onImageDelete
 }: Props) => {
   const { t } = useTranslation('chat');
 
@@ -71,6 +82,10 @@ export const ChatInput = ({
   const [isRecording, setIsRecording] = useState(false);
   const recognitionRef = useRef(null);
 
+  // 添加URL图片相关状态
+  const [imageUrl, setImageUrl] = useState<string>('');
+  const [isUrlInputVisible, setIsUrlInputVisible] = useState<boolean>(false);
+
   const triggerFileUpload = () => {
     fileInputRef?.current.click();
   };
@@ -80,6 +95,44 @@ export const ChatInput = ({
     setInputFileExtension('');
     setInputFileContent('');
     setInputFileContentCompressed('');
+  };
+
+  // URL图片处理函数
+  const handleImageUrlInput = () => {
+    setIsUrlInputVisible(true);
+  };
+
+  const handleImageUrlSubmit = () => {
+    if (!imageUrl.trim()) {
+      setIsUrlInputVisible(false);
+      return;
+    }
+
+    // 验证URL格式
+    if (!isValidUrl(imageUrl)) {
+      toast.error(t('请输入有效的图片URL'));
+      return;
+    }
+
+    // 设置图片内容为URL
+    onImageSelect?.(null as any, imageUrl);
+    setImageUrl('');
+    setIsUrlInputVisible(false);
+  };
+
+  const handleImageUrlCancel = () => {
+    setImageUrl('');
+    setIsUrlInputVisible(false);
+  };
+
+  // URL验证函数
+  const isValidUrl = (url: string) => {
+    try {
+      const parsedUrl = new URL(url);
+      return parsedUrl.protocol === 'http:' || parsedUrl.protocol === 'https:';
+    } catch {
+      return false;
+    }
   };
 
   const handleFileChange = (e: { target: { files: any[]; value: null; }; }) => {
@@ -98,7 +151,6 @@ export const ChatInput = ({
 
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value;
-
     setContent(value);
   };
 
@@ -106,44 +158,75 @@ export const ChatInput = ({
     if (messageIsStreaming) {
       return;
     }
-
+  
     // stop recognition if it's running
     if (isRecording) {
       recognitionRef.current.stop();
       setIsRecording(false);
     }
-
-    if (!content.trim() && !inputFile && !inputFileContent) {
+  
+    if (!content.trim() && !inputFile && !inputFileContent && !imageContent) {
       toast.error(t('Please enter a message'));
       return;
     }
-
-    if (inputFile || inputFileContent) {
-      onSend({
-        role: 'user',
-        content: content,
-        attachments: [{
-          content: inputFileContent,
-          type: 'image'
-        }]
-      })
-      setContent('');
-      setInputFile(null)
-      setInputFileExtension('')
-      setInputFileContent('')
-      setInputFileContentCompressed('');
+  
+    // 构建消息内容和附件
+    let finalContent = content;
+    const attachments = [];
+  
+    // 处理文件附件
+    if (inputFileContent) {
+      attachments.push({
+        content: inputFileContent,
+        type: 'image',
+        name: inputFile || 'file'
+      });
+      
+      // 如果用户没有输入文字，自动添加文件分析指令
+      if (!content.trim()) {
+        finalContent = `请分析这个文件: ${inputFile}`;
+      }
     }
+  
+    // 处理图片附件 - 支持URL图片和base64图片
+    if (imageContent) {
+      // 判断是base64还是URL
+      const isUrl = imageContent.startsWith('http://') || imageContent.startsWith('https://');
+      
+      attachments.push({
+        content: imageContent,
+        type: 'image',
+        name: imageFile?.name || (isUrl ? 'url_image' : 'image'),
+        url: isUrl ? imageContent : undefined // 如果是URL，额外存储url字段
+      });
 
-    else {
-      onSend({ role: 'user', content })
-      setContent('');
-      setInputFile(null)
-      setInputFileExtension('')
-      setInputFileContent('')
-      setInputFileContentCompressed('');
+      if (isUrl) {
+        // 对于URL图片，消息内容包含URL
+        finalContent = content ? `${content} [图片URL: ${imageContent}]` : `分析图片: ${imageContent}`;
+      } else {
+        // 对于base64图片，使用之前的逻辑
+        finalContent = `分析图片: ${imageContent}`;
+      }
     }
-
-
+  
+    // 发送消息
+    onSend({
+      role: 'user',
+      content: finalContent,
+      attachments: attachments.length > 0 ? attachments : undefined
+    });
+  
+    // 重置状态
+    setContent('');
+    setInputFile(null);
+    setInputFileExtension('');
+    setInputFileContent('');
+    setInputFileContentCompressed('');
+    
+    if (imageContent) {
+      onImageDelete?.();
+    }
+  
     if (window.innerWidth < 640 && textareaRef && textareaRef.current) {
       textareaRef.current.blur();
     }
@@ -157,7 +240,6 @@ export const ChatInput = ({
       e.preventDefault();
     }
   };
-
 
   const handleStopConversation = () => {
     if(webSocketMode) {
@@ -185,7 +267,6 @@ export const ChatInput = ({
       /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|mobile|CriOS/i;
     return mobileRegex.test(userAgent);
   };
-
 
   const processFile = ({ fullBase64String, file }: { fullBase64String: string, file: File }) => {
     const [fileType] = file && file.type.split('/');
@@ -222,47 +303,6 @@ export const ChatInput = ({
     }
   }
 
-
-  const handleInitModal = () => {
-    const selectedPrompt = filteredPrompts[activePromptIndex];
-    if (selectedPrompt) {
-      setContent((prevContent) => {
-        const newContent = prevContent?.replace(
-          /\/\w*$/,
-          selectedPrompt.content,
-        );
-        return newContent;
-      });
-      handlePromptSelect(selectedPrompt);
-    }
-    setShowPromptList(false);
-  };
-
-  const parseVariables = (content: string) => {
-    const regex = /{{(.*?)}}/g;
-    const foundVariables = [];
-    let match;
-
-    while ((match = regex.exec(content)) !== null) {
-      foundVariables.push(match[1]);
-    }
-
-    return foundVariables;
-  };
-
-  const handleSubmit = (updatedVariables: string[]) => {
-    const newContent = content?.replace(/{{(.*?)}}/g, (match, variable) => {
-      const index = variables.indexOf(variable);
-      return updatedVariables[index];
-    });
-
-    setContent(newContent);
-
-    if (textareaRef && textareaRef.current) {
-      textareaRef.current.focus();
-    }
-  };
-
   // Additional handlers for drag and drop
   const handleDragOver = (e: React.DragEvent<HTMLTextAreaElement>) => {
     e.preventDefault(); // Necessary to allow the drop event
@@ -279,7 +319,6 @@ export const ChatInput = ({
         processFile({ fullBase64String, file })
       };
       reader.readAsDataURL(file);
-
     }
   };
 
@@ -318,8 +357,7 @@ export const ChatInput = ({
     if (textareaRef && textareaRef.current) {
       textareaRef.current.style.height = 'inherit';
       textareaRef.current.style.height = `${textareaRef.current?.scrollHeight}px`;
-      textareaRef.current.style.overflow = `${textareaRef?.current?.scrollHeight > 400 ? 'auto' : 'hidden'
-        }`;
+      textareaRef.current.style.overflow = `${textareaRef?.current?.scrollHeight > 400 ? 'auto' : 'hidden'}`;
     }
   }, [content, textareaRef]);
 
@@ -381,9 +419,7 @@ export const ChatInput = ({
 
         {!messageIsStreaming &&
           selectedConversation &&
-          selectedConversation.messages.length > 1 &&
-          // selectedConversation.messages[selectedConversation.messages.length - 1].role === 'assistant' && 
-          (
+          selectedConversation.messages.length > 1 && (
             <button
               className="absolute top-0 left-0 right-0 mx-auto mb-3 flex w-fit items-center gap-3 rounded border border-neutral-200 bg-white py-2 px-4 text-black hover:opacity-50 dark:border-neutral-600 dark:bg-[#343541] dark:text-white md:mb-0 md:mt-2"
               onClick={onRegenerate}
@@ -393,6 +429,38 @@ export const ChatInput = ({
           )}
 
         <div className="relative mx-2 flex w-full flex-grow flex-col rounded-md border border-black/10 bg-white shadow-[0_0_10px_rgba(0,0,0,0.10)] dark:border-gray-900/50 dark:bg-[#40414F] dark:text-white dark:shadow-[0_0_15px_rgba(0,0,0,0.10)] sm:mx-4">
+          {/* URL输入弹窗 */}
+          {isUrlInputVisible && (
+            <div className="absolute bottom-full left-0 right-0 mb-2 p-3 bg-white dark:bg-[#343541] rounded-md border border-gray-200 dark:border-gray-600 shadow-lg z-10">
+              <div className="flex items-center gap-2">
+                <input
+                  type="url"
+                  value={imageUrl}
+                  onChange={(e) => setImageUrl(e.target.value)}
+                  placeholder="请输入图片URL地址"
+                  className="flex-1 p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-[#40414F] text-black dark:text-white"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleImageUrlSubmit();
+                    if (e.key === 'Escape') handleImageUrlCancel();
+                  }}
+                  autoFocus
+                />
+                <button
+                  onClick={handleImageUrlSubmit}
+                  className="p-2 bg-[#76b900] text-white rounded-md hover:bg-[#5a8f00]"
+                >
+                  确认
+                </button>
+                <button
+                  onClick={handleImageUrlCancel}
+                  className="p-2 bg-gray-300 dark:bg-gray-600 text-black dark:text-white rounded-md hover:bg-gray-400 dark:hover:bg-gray-500"
+                >
+                  取消
+                </button>
+              </div>
+            </div>
+          )}
+
           <textarea
             ref={textareaRef}
             className="m-0 w-full resize-none border-0 sm:p-3 sm:pl-8 bg-transparent p-0 py-2 pr-8 pl-10 text-black dark:bg-transparent dark:text-white md:py-3 md:pl-10 outline-none"
@@ -416,14 +484,12 @@ export const ChatInput = ({
               onPaste: handlePaste
             })}
           />
-          {inputFile && inputFileContent &&
+          
+          {inputFile && inputFileContent && (
             <div>
               <div className="relative right-0 top-0 p-1 bg-[#91c438] dark:bg-green-700 text-black dark:text-white flex items-center justify-start gap-2 rounded-small">
-                <IconPhoto
-                  className="ml-8"
-                  size={16}
-                />
-                <span >{inputFile}</span>
+                <IconPhoto className="ml-8" size={16} />
+                <span>{inputFile}</span>
                 <IconTrash
                   className="hover:text-[#ff1717e9] cursor-pointer"
                   size={16}
@@ -431,9 +497,43 @@ export const ChatInput = ({
                 />
               </div>
             </div>
-          }
-          {
-            appConfig?.fileUploadEnabled && !inputFile &&
+          )}
+          
+          {/* 显示URL图片预览 */}
+          {imageContent && (imageContent.startsWith('http://') || imageContent.startsWith('https://')) && (
+            <div className="relative right-0 top-0 p-2 bg-[#91c438] dark:bg-green-700 text-black dark:text-white flex items-center justify-start gap-2 rounded-small">
+              <IconPhoto className="ml-4" size={16} />
+              <span className="truncate max-w-xs">{imageContent}</span>
+              <img 
+                src={imageContent} 
+                alt="URL图片预览" 
+                className="w-8 h-8 object-cover rounded-md ml-2"
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                }}
+              />
+              <IconTrash
+                className="hover:text-[#ff1717e9] cursor-pointer ml-auto"
+                size={16}
+                onClick={onImageDelete}
+              />
+            </div>
+          )}
+          
+          {/* 显示上传的图片预览 */}
+          {imageContent && !imageContent.startsWith('http://') && !imageContent.startsWith('https://') && (
+            <div className="relative right-0 top-0 p-1 bg-[#91c438] dark:bg-green-700 text-black dark:text-white flex items-center justify-start gap-2 rounded-small">
+              <IconPhoto className="ml-8" size={16} />
+              <span>{imageFile?.name || '图片'}</span>
+              <IconTrash
+                className="hover:text-[#ff1717e9] cursor-pointer"
+                size={16}
+                onClick={onImageDelete}
+              />
+            </div>
+          )}
+          
+          {appConfig?.fileUploadEnabled && !inputFile && (
             <>
               <button
                 className="absolute right-10 top-2 rounded-sm p-1 text-neutral-800 opacity-60 hover:text-[#76b900] dark:bg-opacity-50 dark:text-neutral-100 dark:hover:text-neutral-200"
@@ -454,13 +554,15 @@ export const ChatInput = ({
                 onChange={handleFileChange}
               />
             </>
-          }
+          )}
+          
           <button
             onClick={handleSpeechToText}
-            className={`absolute left-2 top-2 rounded-sm p-[5px] text-neutral-800 opacity-60 dark:bg-opacity-50 dark:text-neutral-100 ${messageIsStreaming
-              ? 'text-neutral-400' // Disable hover and change color when streaming
-              : 'hover:text-[#76b900] dark:hover:text-neutral-200' // Normal hover effect
-              }`}
+            className={`absolute left-2 top-2 rounded-sm p-[5px] text-neutral-800 opacity-60 dark:bg-opacity-50 dark:text-neutral-100 ${
+              messageIsStreaming
+                ? 'text-neutral-400'
+                : 'hover:text-[#76b900] dark:hover:text-neutral-200'
+            }`}
             disabled={messageIsStreaming}
           >
             {isRecording ? (
@@ -469,6 +571,23 @@ export const ChatInput = ({
               <IconMicrophone size={18} />
             )}
           </button>
+          
+          {/* 添加URL图片按钮 */}
+          <button
+            className="absolute left-8 top-2 rounded-sm p-1 text-neutral-800 opacity-60 hover:text-[#76b900] dark:bg-opacity-50 dark:text-neutral-100 dark:hover:text-neutral-200"
+            onClick={handleImageUrlInput}
+            disabled={messageIsStreaming}
+            title="输入图片URL"
+          >
+            <IconLink size={18} />
+          </button>
+          
+          <ImageUploadButton
+            onImageSelect={onImageSelect}
+            disabled={messageIsStreaming}
+            className="absolute left-14 top-2"
+          />
+          
           <button
             className="absolute right-2 top-2 rounded-sm p-1 text-neutral-800 opacity-60 hover:bg-neutral-200 hover:text-neutral-900 dark:bg-opacity-50 dark:text-neutral-100 dark:hover:text-neutral-200"
             onClick={handleSend}

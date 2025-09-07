@@ -9,20 +9,28 @@ general:
 
 functions:
   tavily_search:
+    _type: mcp_tool_wrapper
+    url: "http://localhost:8080/sse"
     _type: tavily_internet_search
+    transport: "sse"
     description: "Search the web using Tavily API for real-time information"
-  
-  current_datetime:
-    _type: current_datetime
-    description: "Get the current date and time"
+  # tetris_vision_analysis:
+  #   _type: mcp_tool_wrapper
+  #   llm_name: "multimodal_llm"
+  #   url: "http://localhost:8080/sse"
+  #   transport: "sse"
+  #   # mcp_tool_name: image_description
+  #   mcp_tool_name: get_current_time
+  #   description: "Search the web using Tavily API for real-time information"
+
 
 llms:
   # 使用用户提供的ModelScope API
   modelscope_llm:
     _type: openai
-    model_name: "Qwen/Qwen3-235B-A22B-Thinking-2507"
-    api_key: "ms-89f5403e-c244-4c01-ba7e-5202eebc096a"
-    base_url: "https://api-inference.modelscope.cn/v1"
+    model_name: "qwen3-235b-a22b-thinking-2507"
+    api_key: "sk-567d445b24e54ca2a0805cd30877d74f"
+    base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
     temperature: 0.7
     max_tokens: 2048
 
@@ -30,7 +38,7 @@ workflow:
   _type: react_agent
   tool_names:
     - tavily_search
-    - current_datetime
+    # - tetris_vision_analysis:
   llm_name: modelscope_llm
   verbose: true
   parse_agent_response_max_retries: 3

@@ -1,2 +1,0 @@
-[aiq.components]
-aiq_s3_object_store = aiq.plugins.s3.register

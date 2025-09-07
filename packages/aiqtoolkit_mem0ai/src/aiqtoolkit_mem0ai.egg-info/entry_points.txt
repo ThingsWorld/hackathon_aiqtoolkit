@@ -1,2 +1,0 @@
-[aiq.components]
-aiq_mem0ai = aiq.plugins.mem0ai.register

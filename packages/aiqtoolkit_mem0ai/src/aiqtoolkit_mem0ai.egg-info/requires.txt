@@ -1,2 +1,0 @@
-aiqtoolkit~=1.2
-mem0ai~=0.1.30

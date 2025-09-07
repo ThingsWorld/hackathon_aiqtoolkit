@@ -32,6 +32,8 @@ import { InteractionModal } from '@/components/Chat/ChatInteractionMessage';
 import { webSocketMessageTypes } from '@/utils/app/const';
 import { ChatHeader } from './ChatHeader';
 
+import { ImageUploadButton } from './ImageUploadButton';
+
 export const Chat = () => {
   const { t } = useTranslation('chat');
   const {
@@ -53,6 +55,10 @@ export const Chat = () => {
     handleUpdateConversation,
     dispatch: homeDispatch,
   } = useContext(HomeContext);
+
+  // 在这里添加图片相关的状态
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imageContent, setImageContent] = useState<string>('');
 
   const [currentMessage, setCurrentMessage] = useState<Message>();
   const [autoScrollEnabled, setAutoScrollEnabled] = useState<boolean>(true);
@@ -109,6 +115,19 @@ export const Chat = () => {
     };
     console.log('sending user response for interaction message via websocket', wsMessage)
     webSocketRef?.current?.send(JSON.stringify(wsMessage));
+  };
+
+
+  // 图片上传处理函数
+  const handleImageSelect = (file: File, base64Content: string) => {
+    setImageFile(file);
+    setImageContent(base64Content);
+  };
+
+  // 添加图片删除函数
+  const handleImageDelete = () => {
+    setImageFile(null);
+    setImageContent('');
   };
 
   useEffect(() => {
@@ -419,6 +438,14 @@ export const Chat = () => {
 
   const handleSend = useCallback(
     async (message: Message, deleteCount = 0, retry = false) => {
+
+      if (imageContent) {
+        message.attachments = [{
+          content: imageContent,
+          type: 'image',
+          name: imageFile?.name || 'image'
+        }];
+      }
       message.id = uuidv4();
       // chat with bot
       if (selectedConversation) {
@@ -792,6 +819,8 @@ export const Chat = () => {
       }
     },
     [
+      imageContent, 
+      imageFile,
       conversations,
       selectedConversation,
       homeDispatch,
@@ -969,6 +998,9 @@ export const Chat = () => {
           onSend={(message) => {
             setCurrentMessage(message);
             handleSend(message, 0);
+            // 发送后清空图片
+            setImageFile(null);
+            setImageContent('');
           }}
           onScrollDownClick={handleScrollDown}
           onRegenerate={() => {
@@ -983,6 +1015,11 @@ export const Chat = () => {
           }}
           showScrollDownButton={showScrollDownButton}
           controller={controllerRef}
+
+          onImageSelect={handleImageSelect}
+          imageFile={imageFile}
+          imageContent={imageContent}
+          onImageDelete={handleImageDelete}
         />
         <InteractionModal isOpen={modalOpen} interactionMessage={interactionMessage} onClose={() => setModalOpen(false)} onSubmit={handleUserInteraction} />
       </>

@@ -1,0 +1,366 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+import base64
+import io
+import os
+from typing import Optional, Dict, Any, Union
+from PIL import Image
+import asyncio
+from urllib.parse import urlparse
+
+from nat.builder.builder import Builder
+from nat.builder.framework_enum import LLMFrameworkEnum
+from nat.builder.function_info import FunctionInfo
+from nat.cli.register_workflow import register_function
+from nat.data_models.component_ref import LLMRef
+from nat.data_models.function import FunctionBaseConfig
+
+
+class ImageDescriptionToolConfig(FunctionBaseConfig, name="image_description"):
+    """
+    Tool that analyzes images and generates detailed text descriptions of the visual content.
+    Uses the configured multimodal LLM for image understanding.
+    """
+    llm_name: LLMRef
+    max_file_size: int = 5 * 1024 * 1024  # 5MB
+    supported_formats: list = ["jpg", "jpeg", "png", "webp", "gif", "bmp"]
+    detail_level: str = "detailed"  # Options: "brief", "detailed", "comprehensive"
+    timeout: int = 30
+    verbose: bool = False
+
+
+@register_function(config_type=ImageDescriptionToolConfig)
+async def image_description(tool_config: ImageDescriptionToolConfig, builder: Builder):
+    import logging
+    logger = logging.getLogger(__name__)
+
+    # Get the configured multimodal LLM
+    llm = await builder.get_llm(tool_config.llm_name, wrapper_type=LLMFrameworkEnum.LANGCHAIN)
+
+    async def _image_description(
+        image_input: Union[str, bytes, Image.Image], 
+        detail_level: Optional[str] = None
+    ) -> str:
+        """
+        Analyze an image and generate a detailed text description using multimodal LLM.
+        
+        Args:
+            image_input (Union[str, bytes, Image.Image]): Image input in multiple formats:
+                - base64 string (with or without data URL prefix)
+                - file path string
+                - image URL string
+                - bytes object (raw image data)
+                - PIL Image object
+            detail_level (str, optional): Level of detail for the description. 
+                Options: "brief", "detailed", "comprehensive". Defaults to configured value.
+        """
+        try:
+            # Check if input is example.com URL (common test case)
+            if isinstance(image_input, str) and 'example.com' in image_input:
+                return ("检测到示例URL (example.com)。请提供真实的图片地址、base64编码的图片数据，"
+                       "或者上传图片文件。支持的格式：\n"
+                       "- 图片URL (如 https://your-image.com/pic.jpg)\n"
+                       "- base64编码数据\n"
+                       "- 本地文件路径")
+            
+            # Process and validate image input
+            processed_image_data = await _process_image_input(image_input, tool_config)
+            if isinstance(processed_image_data, Dict) and 'error' in processed_image_data:
+                error_msg = processed_image_data['error']
+                
+                # Provide helpful guidance for common errors
+                if "HTTP" in error_msg and "404" in error_msg:
+                    return (f"图片下载失败: {error_msg}\n\n"
+                           "可能的原因：\n"
+                           "1. 图片URL不存在或已删除\n"
+                           "2. 需要登录或授权才能访问\n"
+                           "3. URL格式不正确\n\n"
+                           "请检查URL是否正确，或尝试其他方式提供图片。")
+                elif "HTTP" in error_msg:
+                    return (f"图片访问失败: {error_msg}\n\n"
+                           "请检查网络连接和URL有效性。")
+                else:
+                    return f"图片处理错误: {error_msg}"
+            
+            # Use provided detail level or fall back to config
+            actual_detail_level = detail_level or tool_config.detail_level
+            
+            # Generate image description using multimodal LLM
+            description = await _generate_image_description(
+                processed_image_data, 
+                actual_detail_level, 
+                tool_config,
+                llm
+            )
+            
+            return description
+            
+        except Exception as e:
+            logger.error(f"Error analyzing image: {str(e)}")
+            return f"图片分析失败: {str(e)}"
+
+    async def _process_image_input(
+        image_input: Union[str, bytes, Image.Image], 
+        config: ImageDescriptionToolConfig
+    ) -> Union[str, Dict]:
+        """Process and validate various image input formats."""
+        
+        # Case 1: PIL Image object
+        if isinstance(image_input, Image.Image):
+            return _image_to_base64(image_input, config)
+        
+        # Case 2: Bytes object (raw image data)
+        elif isinstance(image_input, bytes):
+            return _validate_image_data(image_input, config)
+        
+        # Case 3: String input (base64, file path, or URL)
+        elif isinstance(image_input, str):
+            # Check for empty input
+            if not image_input.strip():
+                return {"error": "图片输入为空"}
+            
+            # Check if it's a base64 string (with or without data URL)
+            if _is_base64_like(image_input):
+                return _process_base64_input(image_input, config)
+            
+            # Check if it's a file path
+            elif os.path.exists(image_input) and os.path.isfile(image_input):
+                return await _process_file_input(image_input, config)
+            
+            # Check if it's a URL
+            elif _is_url(image_input):
+                return await _process_url_input(image_input, config)
+            
+            else:
+                return {"error": f"无法识别输入格式: '{image_input[:50]}...'。支持：base64、文件路径、图片URL"}
+        
+        else:
+            return {"error": f"不支持的输入类型: {type(image_input)}"}
+
+    def _is_base64_like(data: str) -> bool:
+        """Check if string looks like base64 data."""
+        if not data or len(data) < 50:
+            return False
+        
+        # Data URL format
+        if data.startswith('data:image'):
+            return True
+        
+        # Pure base64 - check character set
+        base64_chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/='
+        return all(c in base64_chars for c in data) and len(data) >= 100
+
+    def _is_url(text: str) -> bool:
+        """Check if string is a valid URL."""
+        try:
+            result = urlparse(text)
+            return bool(result.scheme and result.netloc and 
+                       result.scheme in ['http', 'https', 'ftp'])
+        except:
+            return False
+
+    def _process_base64_input(image_data: str, config: ImageDescriptionToolConfig) -> Union[str, Dict]:
+        """Process base64 encoded image data."""
+        # Remove data URL prefix if present
+        if image_data.startswith('data:image'):
+            parts = image_data.split(',', 1)
+            if len(parts) == 2:
+                image_data = parts[1]
+        
+        try:
+            decoded = base64.b64decode(image_data)
+            return _validate_image_data(decoded, config)
+        except base64.binascii.Error:
+            return {"error": "无效的base64图片数据"}
+        except Exception as e:
+            return {"error": f"base64数据处理失败: {str(e)}"}
+
+    async def _process_file_input(file_path: str, config: ImageDescriptionToolConfig) -> Union[str, Dict]:
+        """Process image file from local path."""
+        try:
+            # Check file size
+            file_size = os.path.getsize(file_path)
+            if file_size > config.max_file_size:
+                return {"error": f"文件大小超过限制: {file_size}字节 > {config.max_file_size}字节"}
+            
+            # Check file extension
+            file_ext = os.path.splitext(file_path)[1].lower().lstrip('.')
+            if file_ext not in config.supported_formats:
+                return {"error": f"不支持的文件格式: .{file_ext}。支持: {', '.join(config.supported_formats)}"}
+            
+            # Read file and validate
+            with open(file_path, 'rb') as f:
+                image_data = f.read()
+            
+            return _validate_image_data(image_data, config)
+            
+        except FileNotFoundError:
+            return {"error": f"文件不存在: {file_path}"}
+        except PermissionError:
+            return {"error": f"没有权限读取文件: {file_path}"}
+        except Exception as e:
+            return {"error": f"文件处理失败: {str(e)}"}
+
+    async def _process_url_input(url: str, config: ImageDescriptionToolConfig) -> Union[str, Dict]:
+        """Download and process image from URL."""
+        try:
+            import aiohttp
+            
+            # Check if URL points to a supported image format
+            parsed_url = urlparse(url)
+            path = parsed_url.path.lower()
+            if not any(path.endswith(f'.{fmt}') for fmt in config.supported_formats):
+                return {"error": f"URL可能不是图片文件，或不支持该格式。支持: {', '.join(config.supported_formats)}"}
+            
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            }
+            
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, headers=headers, timeout=config.timeout) as response:
+                    if response.status == 200:
+                        content_type = response.headers.get('content-type', '')
+                        if not content_type.startswith('image/'):
+                            return {"error": f"URL返回的内容不是图片: {content_type}"}
+                        
+                        image_data = await response.read()
+                        
+                        # Check size
+                        if len(image_data) > config.max_file_size:
+                            return {"error": f"下载的图片大小超过限制: {len(image_data)}字节 > {config.max_file_size}字节"}
+                        
+                        return _validate_image_data(image_data, config)
+                    else:
+                        return {"error": f"HTTP {response.status} - {await response.text()}"}
+                        
+        except asyncio.TimeoutError:
+            return {"error": "图片下载超时"}
+        except Exception as e:
+            return {"error": f"URL处理失败: {str(e)}"}
+
+    def _validate_image_data(image_data: bytes, config: ImageDescriptionToolConfig) -> Union[str, Dict]:
+        """Validate image data and convert to base64."""
+        try:
+            # Validate file size
+            if len(image_data) > config.max_file_size:
+                return {"error": f"图片大小超过限制: {len(image_data)}字节 > {config.max_file_size}字节"}
+            
+            # Validate image format
+            try:
+                image = Image.open(io.BytesIO(image_data))
+                if image.format.lower() not in [fmt.lower() for fmt in config.supported_formats]:
+                    return {"error": f"不支持的图片格式: {image.format}。支持: {', '.join(config.supported_formats)}"}
+            except Exception as img_error:
+                return {"error": f"无效的图片数据: {str(img_error)}"}
+            
+            # Convert to base64 for API
+            return base64.b64encode(image_data).decode('utf-8')
+            
+        except Exception as e:
+            return {"error": f"图片验证失败: {str(e)}"}
+
+    def _image_to_base64(image: Image.Image, config: ImageDescriptionToolConfig) -> Union[str, Dict]:
+        """Convert PIL Image to base64."""
+        try:
+            # Convert image to bytes
+            img_byte_arr = io.BytesIO()
+            image_format = image.format or 'PNG'
+            image.save(img_byte_arr, format=image_format)
+            img_byte_arr = img_byte_arr.getvalue()
+            
+            return _validate_image_data(img_byte_arr, config)
+            
+        except Exception as e:
+            return {"error": f"PIL图像转换失败: {str(e)}"}
+
+    async def _generate_image_description(
+        image_data: str, 
+        detail_level: str, 
+        config: ImageDescriptionToolConfig,
+        llm
+    ) -> str:
+        """Generate image description using configured multimodal LLM."""
+        
+        # Build prompt based on detail level
+        prompt = _build_description_prompt(detail_level)
+        
+        # Create the message for multimodal LLM
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/jpeg;base64,{image_data}"
+                        }
+                    },
+                    {
+                        "type": "text",
+                        "text": prompt
+                    }
+                ]
+            }
+        ]
+        
+        try:
+            # Use the configured LLM to generate description
+            response = await llm.ainvoke(messages)
+            
+            if config.verbose:
+                logger.debug(f"Image description generated: {response.content}")
+            
+            return response.content.strip()
+                        
+        except Exception as e:
+            logger.error(f"LLM image description failed: {str(e)}")
+            return f"图片描述生成失败: {str(e)}"
+
+    def _build_description_prompt(detail_level: str) -> str:
+        """Build appropriate prompt based on detail level."""
+        prompts = {
+            "brief": "你是一个专业的俄罗斯方块游戏分析师，专门分析游戏截图并提取游戏状态信息。用中文回答。",
+            "detailed": """请详细描述这张图片的内容，包括：
+            请按照JSON格式回复，包含以下字段：
+            - current_score: 当前分数
+            - current_level: 当前等级
+            - lines_cleared: 已消除行数
+            - next_piece: 下一个方块类型
+            - hold_piece: Hold区域中的方块类型
+            - game_status: 游戏状态
+            - board_state: 棋盘状态描述
+            - active_piece: 当前活跃方块信息
+            - risks: 风险分析
+            - opportunities: 机会分析
+            - recommended_actions: 推荐操作
+            请提供详细的中文描述。"""
+        }
+        
+        return prompts.get(detail_level, prompts["detailed"])
+
+    # Create the function info
+    yield FunctionInfo.from_fn(
+        _image_description,
+        description=("""俄罗斯方块游戏视觉分析工具。分析游戏截图并提取游戏状态信息。
+
+参数:
+    image_input: 游戏截图，支持URL、文件路径、字节数据或PIL图像
+    detail_level: 分析详细程度 (basic, detailed, expert)
+
+返回:
+    Dict: 包含游戏状态分析的字典，包括分数、等级、方块布局等信息
+"""),
+    )

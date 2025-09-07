@@ -1,16 +1,18 @@
 # NVIDIA NeMo Agent Toolkit AI对话机器人
 
-> 🏆 **黑客松项目** - 基于NVIDIA官方NeMo Agent Toolkit构建的智能对话机器人，展示AI Agent的强大功能
+> 🏆 **黑客松项目** - 基于NVIDIA NeMo Agent Toolkit构建的智能俄罗斯方块分析系统，融合多模态视觉理解与策略推理
 
-![AI对话机器人界面](docs/ui_screenshot.png)
+![俄罗斯方块游戏](docs/tetris_analysis_ui.png)
 
 ## 🎯 项目简介
 
-本项目是为推广NVIDIA NeMo Agent Toolkit而开发的AI对话机器人示例，完全基于NVIDIA官方技术栈构建。系统集成了实时网络搜索、时间查询等功能，支持用户自定义OpenAI兼容的API接口，是学习和体验AI Agent技术的完美起点。
+本项目是基于**NVIDIA NeMo Agent Toolkit**开发的俄罗斯方块智能分析系统，专门针对游戏场景进行深度优化。系统通过先进的**多模态视觉语言模型**实时解析游戏截图，提供专业的游戏状态分析和策略建议。
 
 ### ✨ 核心特性
 
 - 🤖 **官方架构**: 100%使用NVIDIA官方NeMo Agent Toolkit
+- 👁️ **多模态视觉分析**: 集成通义千问qwen-vl-max模型，精准识别游戏状态
+- 🧠 **智能策略推理**: 基于游戏状态提供专业级策略建议
 - 🌐 **实时搜索**: 集成Tavily API，支持实时网络搜索
 - ⏰ **时间查询**: 获取当前日期和时间信息
 - 🔧 **灵活配置**: 支持任何OpenAI兼容的API接口

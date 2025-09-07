@@ -1,0 +1,83 @@
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# 俄罗斯方块分析系统配置
+
+general:
+  use_uvloop: true
+  log_level: "INFO"
+
+functions:
+  # 俄罗斯方块视觉分析工具
+  tetris_vision_analysis:
+    _type: image_description 
+    llm_name: "multimodal_llm"
+    description: "分析俄罗斯方块游戏截图并提取游戏状态信息"
+    supported_formats: ["jpg", "jpeg", "png", "webp"]
+
+  # 俄罗斯方块策略分析工具
+  tetris_strategy_analysis:
+    _type: tetris_strategy_analysis
+    llm_name: "strategy_llm"
+    description: "基于游戏状态提供俄罗斯方块策略建议"
+
+llms:
+  # 多模态模型配置 - 用于图像分析
+  multimodal_llm:
+    _type: openai
+    model_name: "qwen-vl-max"
+    api_key: "sk-xxxx"
+    base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    temperature: 0.3
+    max_tokens: 1024
+    timeout: 60
+
+  # 策略分析模型 - 用于游戏策略
+  strategy_llm:
+    _type: openai
+    model_name: "qwen-max"
+    api_key: "sk-xxx"
+    base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    temperature: 0.2
+    max_tokens: 512
+    timeout: 30
+
+# 主工作流 - 俄罗斯方块分析流水线
+workflow:
+  _type: react_agent
+  tool_names:
+    - tetris_vision_analysis
+    - tetris_strategy_analysis
+  llm_name: multimodal_llm
+  system_message: |
+    你是一个专业的俄罗斯方块游戏分析系统，专门处理游戏截图并提供策略建议。
+    
+    🎮 处理流程：
+    1. 首先使用 tetris_vision_analysis 分析游戏截图，提取游戏状态信息
+    2. 然后使用 tetris_strategy_analysis 基于游戏状态提供专业策略建议
+    3. 整合分析结果，生成完整的游戏分析报告
+    
+    📋 输入识别：
+    - 图片URL或图像数据 → 完整的视觉+策略分析
+    - 游戏状态描述文本 → 直接策略分析
+    
+    🎯 输出要求：
+    - 用中文输出，结构清晰
+    - 包含具体的操作建议
+    - 提供风险预警和机会识别
+    - 格式美观，分段明确
+    
+    ⚡ 错误处理：
+    - 如果图片分析失败，提供友好的错误信息
+    - 如果策略分析失败，尝试基于视觉分析结果提供基本建议
+    
+    示例工作流程：
+    用户输入: "分析这张俄罗斯方块图片: https://example.com/tetris.jpg"
+    1. 调用 tetris_vision_analysis 分析图片
+    2. 获取游戏状态结果
+    3. 调用 tetris_strategy_analysis 提供策略
+    4. 生成最终分析报告
+  verbose: true
+  parse_agent_response_max_retries: 3
+  max_iterations: 8
+  early_stopping: true
