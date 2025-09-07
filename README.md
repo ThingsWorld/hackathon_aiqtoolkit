@@ -1,4 +1,4 @@
-# NVIDIA NeMo Agent Toolkit AI对话机器人
+# NVIDIA NeMo Agent Toolkit 融合多模态视觉理解与策略推理
 
 > 🏆 **黑客松项目** - 基于NVIDIA NeMo Agent Toolkit构建的智能俄罗斯方块分析系统，融合多模态视觉理解与策略推理
 
@@ -8,268 +8,91 @@
 
 本项目是基于**NVIDIA NeMo Agent Toolkit**开发的俄罗斯方块智能分析系统，专门针对游戏场景进行深度优化。系统通过先进的**多模态视觉语言模型**实时解析游戏截图，提供专业的游戏状态分析和策略建议。
 
-### ✨ 核心特性
-
-- 🤖 **官方架构**: 100%使用NVIDIA官方NeMo Agent Toolkit
-- 👁️ **多模态视觉分析**: 集成通义千问qwen-vl-max模型，精准识别游戏状态
-- 🧠 **智能策略推理**: 基于游戏状态提供专业级策略建议
-- 🌐 **实时搜索**: 集成Tavily API，支持实时网络搜索
-- ⏰ **时间查询**: 获取当前日期和时间信息
-- 🔧 **灵活配置**: 支持任何OpenAI兼容的API接口
-- 🎨 **现代界面**: 官方UI，支持实时对话和流式响应
-- 🚀 **一键部署**: 跨平台安装脚本，支持Windows/Linux/macOS
-
-## 🏗️ 技术架构
-
-### 前端
-- **框架**: Next.js 14 + TypeScript
-- **UI库**: 官方[NeMo-Agent-Toolkit-UI](https://github.com/NVIDIA/NeMo-Agent-Toolkit-UI)
-- **特性**: 实时聊天、主题切换、历史记录
-
-### 后端
-- **核心**: [NVIDIA NeMo Agent Toolkit (AIQ)](https://github.com/NVIDIA/NeMo-Agent-Toolkit/tree/develop)
-- **工作流**: React Agent
-- **工具**: Tavily搜索、时间查询
-
-### 模型支持
-- **默认**: Qwen模型
-- **兼容**: 任何OpenAI格式的API
-- **自定义**: 用户可配置API密钥、模型名称、base_url
-
-## 🚀 快速开始
-
-### 📋 环境要求
-
-- **Python**: 3.12+
-- **Node.js**: 18+
-- **Git**: 最新版本
-- **操作系统**: Windows 10+/macOS 10.15+/Ubuntu 20.04+
-
-### ⚡ 一键安装
-
-#### 克隆项目
-```bash
-git clone https://github.com/HeKun-NVIDIA/hackathon_aiqtoolkit.git
-cd hackathon_aiqtoolkit
-```
-### 🔑 配置API密钥
-
-安装完成后，您需要配置以下API密钥：
-
-#### 1. Tavily搜索API密钥
-在`install.sh`文件中185行左右，将Your API Key替换成你自己的Tavily API Key 来保证搜索功能正常
-```bash
-# 设置环境变量
-export TAVILY_API_KEY=Your API Key
-```
-**获取Tavily API密钥**：
-1. 访问 [Tavily官网](https://tavily.com/)
-2. 注册账户并获取免费API密钥
-3. 将密钥添加到环境变量中
-
-#### 2. 大模型API密钥
-
-编辑 `install.sh` 文件中154行左右,将Your API Key替换成你自己的Bailian API Key：
-
-```yaml
-llms:
-  # 默认使用Bailian API (用户可修改)
-  default_llm:
-    _type: openai
-    model_name: "qwen-plus"
-    api_key: "Your API Key"
-    base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
-    temperature: 0.7
-    max_tokens: 2048
-```
-
-**支持的API提供商**：
-- **阿里云百炼平台Qwen系列**: `https://bailian.console.aliyun.com/?tab=model#/model-market`
-- **其他**: 任何OpenAI兼容的API
-
-#### Linux/macOS
-```bash
-# 运行安装脚本
-chmod +x install.sh
-./install.sh
-```
-
-#### Windows
-```powershell
-# 运行安装脚本
-install.bat
-```
-
-
-
-### 🎮 启动系统
-
-```bash
-# 启动服务
-cd NeMo-Agent-Toolkit
-./start.sh
-
-# 停止服务
-./stop.sh
-```
-
-### 🌐 访问地址
-
-- **前端界面**: http://localhost:3000
-- **API文档**: http://localhost:8001/docs
-- **健康检查**: http://localhost:8001/health
-
-## 🧪 功能测试
-
-### 网络搜索测试
-```
-用户: 北京今天的天气怎么样，气温是多少？
-AI: 今天北京天气晴朗，气温在18℃至31℃之间，当前温度约30℃，西南风3级，相对湿度43%，空气质量良好，体感温度舒适。白天最高气温可达31℃，夜间最低18℃，全天无降水，紫外线较强，建议做好防晒措施。
-```
-
-### 时间查询测试
-```
-用户: 现在几点了？
-AI: 现在是晚上11点17分。
-```
-
-### 公司信息搜索测试
-```
-用户: 帮我介绍一下NVIDIA Agent Intelligence Toolkit
-AI: [搜索并介绍NVIDIA AIQ工具包的详细信息]
-```
-
-## 📁 项目结构
-
-```
-nvidia-nemo-agent-toolkit-hackathon/
-├── configs/                    # 配置文件
-│   └── hackathon_config.yml   # 主配置文件
-├── external/                   # 外部模块
-│   └── aiqtoolkit-opensource-ui/  # 官方UI
-├── docs/                       # 文档和截图
-│   └── ui_screenshot.png      # 界面截图
-├── src/                        # 源代码
-├── install.sh                  # Linux/macOS安装脚本
-├── install.bat                 # Windows安装脚本
-├── start.sh                    # 启动脚本
-├── stop.sh                     # 停止脚本
-└── README.md                   # 说明文档
-```
-
-## ⚙️ 高级配置
-
-### 自定义工具
-
-在配置文件中添加新工具：
-
-```yaml
-functions:
-  your_custom_tool:
-    _type: your_tool_type
-    description: "工具描述"
-    # 其他配置参数
-```
-
-### 自定义工作流
+基于 https://github.com/HeKun-NVIDIA/hackathon_aiqtoolkit 开源项目，
 
-```yaml
-workflow:
-  _type: react_agent
-  tool_names:
-    - internet_search
-    - current_datetime
-    - your_custom_tool
-  llm_name: default_llm
-  verbose: true
-```
+这里默认已经配置好环境。
 
-### 调试模式
+### 一、前端UI层实现方案
 
-```bash
-# 启用详细日志
-aiq serve --config_file configs/hackathon_config.yml --verbose
-```
+**修改目标：** 在现有聊天界面基础上增强图片处理能力，支持俄罗斯方块游戏截图上传和分析
 
-## 🐛 故障排除
+**核心修改文件：**
 
-### 常见问题
+1. **ChatInput.tsx** - 增强输入组件
+   - 添加图片上传按钮和拖拽区域
+   - 支持常见图片格式（jpg, jpeg, png, webp）
+   - 实现图片预览和删除功能
+2. **ChatMessage.tsx** - 增强消息显示
+   - 添加图片消息类型渲染
+   - 支持游戏截图缩略图显示
+   - 添加分析状态指示器
+3. **Chat.tsx** - 主聊天逻辑
+   - 集成图片上传API调用
+   - 管理分析状态和结果显示
 
-#### 1. 端口占用
-```bash
-# 检查端口占用
-netstat -tlnp | grep :8001
+**技术实现要点：**
 
-# 使用不同端口
-aiq serve --port 8002
-```
+- 使用React Hook管理图片状态
+- 实现文件类型验证和大小限制
+- 添加加载状态和错误处理
+- 保持与现有消息系统的兼容性
 
-#### 2. API密钥错误
-- 检查 `configs/hackathon_config.yml` 中的API密钥配置
-- 确认环境变量 `TAVILY_API_KEY` 已正确设置
-- 验证API密钥的有效性和权限
+### 二、后端工具层实现方案
 
-#### 3. 依赖安装失败
-```bash
-# 清理缓存重新安装
-uv cache clean
-uv pip install -e . --force-reinstall
-```
+**新增工具模块：**
 
-#### 4. 前端无法连接后端
-- 检查后端是否正常启动（访问 http://localhost:8001/health）
-- 确认端口配置正确
-- 检查防火墙设置
+1. **image_description.py** - 视觉分析工具
 
-### 日志查看
+   ```
+   功能：俄罗斯方块游戏截图分析
+   输入：图像文件或URL
+   输出：结构化游戏状态信息
+   处理流程：
+     - 图像预处理和格式转换
+     - 调用多模态LLM进行游戏状态识别
+     - 提取关键信息（方块类型、布局、分数等）
+     - 返回标准化分析结果
+   ```
 
-```bash
-# 查看后端日志
-tail -f logs/aiq.log
+2. **tetris_strategy_analysis.py** - 策略分析工具
 
-# 查看前端日志
-cd external/aiqtoolkit-opensource-ui
-npm run dev -- --verbose
-```
+   ```
+   功能：基于游戏状态提供策略建议
+   输入：游戏状态描述（来自视觉分析或用户输入）
+   输出：策略建议和操作指导
+   分析维度：
+     - 当前局势评估
+     - 最佳放置位置推荐
+     - 风险预警和机会识别
+     - 具体操作步骤建议
+   ```
 
-## 📚 相关资源
+**注册机制（register.py）：**
 
-### 官方文档
-- [NVIDIA NeMo Agent Toolkit](https://github.com/NVIDIA/NeMo-Agent-Toolkit)
-- [官方文档](https://docs.nvidia.com/nemo-agent-toolkit/)
-- [NeMo Agent Toolkit UI](https://github.com/NVIDIA/NeMo-Agent-Toolkit-UI)
+- 按照配置文件的`_type`字段注册工具
+- 确保工具名称与配置一致
+- 实现工具发现和加载机制
 
-### API文档
-- [Tavily API文档](https://docs.tavily.com/)
-- [阿里云百炼平台](https://bailian.console.aliyun.com/?tab=doc#/doc)
-- [OpenAI API文档](https://platform.openai.com/docs/)
+### 三、配置系统实现方案
 
-### 学习资源
-- [AI Agent开发指南](https://docs.nvidia.com/nemo-agent-toolkit/user-guide/)
-- [React Agent工作流](https://docs.nvidia.com/nemo-agent-toolkit/workflows/react-agent/)
-- [MCP协议文档](https://docs.nvidia.com/nemo-agent-toolkit/mcp/)
+**tetris_agent_config.yml 解析：**
 
-## 🏆 黑客松信息
+1. **功能工具配置**
+   - 视觉分析工具：绑定多模态LLM，支持指定图片格式
+   - 策略分析工具：绑定策略LLM，专注文本分析
 
-本项目专为推广NVIDIA NeMo Agent Toolkit技术而开发，旨在：
+2. **LLM服务配置**
+   - 多模态LLM：使用qwen-vl-max处理图像理解
+   - 策略LLM：使用qwen-max生成策略建议
+   - 统一的API密钥和端点配置
 
-- 🎯 **展示AI Agent能力**: 通过实际应用展示NVIDIA NeMo Agent Toolkit的强大功能
-- 🚀 **降低学习门槛**: 提供完整的示例代码和详细文档，帮助开发者快速上手
-- 🌟 **促进技术交流**: 为AI Agent技术爱好者提供学习和交流的平台
-- 💡 **激发创新思维**: 鼓励开发者基于此项目创建更多创新应用
+3. **工作流配置**
+   - ReAct代理模式，支持工具链调用
+   - 清晰的系统提示词定义处理流程
+   - 完善的错误处理和重试机制
 
-### 技术亮点
+**启动流程：**
 
-- ✅ **完全官方架构**: 严格遵循NVIDIA官方技术规范
-- ✅ **生产级质量**: 包含完整的错误处理、日志记录和监控
-- ✅ **易于扩展**: 模块化设计，支持快速添加新功能
-- ✅ **跨平台支持**: 一套代码，多平台运行
+直接运行 start.sh
 
-
-
----
-
-**🎯 让我们一起探索AI Agent的无限可能！**
-
-> 本项目展示了NVIDIA NeMo Agent Toolkit在实际应用中的强大能力，为AI Agent技术的普及和发展贡献力量。无论您是AI初学者还是资深开发者，都能从这个项目中获得有价值的学习体验。
-
+![运行结果](docs/run.png)
